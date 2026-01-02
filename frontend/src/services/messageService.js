@@ -21,10 +21,11 @@ export const messageService = {
   },
 
   async sendMessage(conversationId, text, attachment = null) {
-    const response = await api.post(`/v1/messages/${conversationId}`, {
-      text,
-      attachment,
-    })
+    const payload = {}
+    if (text) payload.text = text
+    if (attachment) payload.attachment = attachment
+    
+    const response = await api.post(`/v1/messages/${conversationId}`, payload)
     return response.data
   },
 

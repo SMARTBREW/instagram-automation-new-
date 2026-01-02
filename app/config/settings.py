@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # CORS - can be comma-separated string or "*" for all
     CORS_ORIGINS: str
     
+    # Cloudinary
+    CLOUDINARY_CLOUD_NAME: str
+    CLOUDINARY_API_KEY: str
+    CLOUDINARY_API_SECRET: str
+    
     def get_cors_origins(self) -> List[str]:
         """Parse CORS origins from comma-separated string"""
         if self.CORS_ORIGINS == "*":

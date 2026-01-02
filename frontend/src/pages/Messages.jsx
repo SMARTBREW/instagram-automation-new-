@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Send, User, Bot, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Send, User, Bot, MessageSquare, Image as ImageIcon, X } from 'lucide-react'
 import { messageService } from '../services/messageService'
+import { uploadService } from '../services/uploadService'
 import { formatTime, formatRelativeTime } from '../utils/timeUtils'
 import toast from 'react-hot-toast'
 
@@ -13,6 +14,9 @@ export default function Messages() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
+  const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -40,15 +44,76 @@ export default function Messages() {
     }
   }
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size should be less than 10MB')
+      return
+    }
+
+    setSelectedImage(file)
+    
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removeImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const uploadImageToUrl = async (file) => {
+    try {
+      // Upload to Cloudinary via backend
+      const result = await uploadService.uploadImage(file)
+      return result.url
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Failed to upload image')
+      throw error
+    }
+  }
+
   const handleSend = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim() || sending) return
+    if ((!newMessage.trim() && !selectedImage) || sending) return
 
     setSending(true)
     try {
-      const sentMessage = await messageService.sendMessage(conversationId, newMessage.trim())
+      let attachment = null
+      
+      // Handle image upload
+      if (selectedImage) {
+        const imageUrl = await uploadImageToUrl(selectedImage)
+        attachment = {
+          type: 'image',
+          url: imageUrl
+        }
+      }
+
+      const sentMessage = await messageService.sendMessage(
+        conversationId, 
+        newMessage.trim() || null,
+        attachment
+      )
       setMessages((prev) => [sentMessage, ...prev])
       setNewMessage('')
+      removeImage()
       toast.success('Message sent!')
     } catch (error) {
       toast.error(error.response?.data?.error?.message || 'Failed to send message')
@@ -113,7 +178,44 @@ export default function Messages() {
                             <Bot className="w-5 h-5 mt-0.5 flex-shrink-0" />
                           )}
                           <div className="flex-1">
-                            <p className="text-sm break-words">{message.text}</p>
+                            {/* Display text if available */}
+                            {message.text && (
+                              <p className="text-sm break-words mb-2">{message.text}</p>
+                            )}
+                            
+                            {/* Display attachments (images) */}
+                            {message.attachments && message.attachments.length > 0 && (
+                              <div className="space-y-2 mb-2">
+                                {message.attachments.map((attachment, idx) => (
+                                  <div key={idx} className="rounded-lg overflow-hidden">
+                                    {attachment.type === 'image' && (
+                                      <>
+                                        <img
+                                          src={attachment.url}
+                                          alt="Attachment"
+                                          className="max-w-full h-auto max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition object-contain"
+                                          onClick={() => window.open(attachment.url, '_blank')}
+                                          onError={(e) => {
+                                            e.target.style.display = 'none'
+                                            const fallback = e.target.nextElementSibling
+                                            if (fallback) fallback.style.display = 'block'
+                                          }}
+                                        />
+                                        <div className="hidden p-2 bg-gray-100 rounded text-sm text-center">
+                                          Failed to load image
+                                        </div>
+                                      </>
+                                    )}
+                                    {attachment.type !== 'image' && (
+                                      <div className="p-2 bg-gray-100 rounded text-sm">
+                                        {attachment.type} attachment
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
                             <p
                               className={`text-xs mt-1 ${
                                 message.sender === 'page'
@@ -133,12 +235,52 @@ export default function Messages() {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Image Preview */}
+            {imagePreview && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl shadow-lg p-4 mb-4 relative"
+              >
+                <button
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-w-xs max-h-48 rounded-lg"
+                />
+              </motion.div>
+            )}
+
             <motion.form
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               onSubmit={handleSend}
               className="bg-white rounded-xl shadow-lg p-4 flex gap-3"
             >
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition flex items-center gap-2"
+                disabled={sending}
+              >
+                <ImageIcon className="w-5 h-5" />
+              </motion.button>
+
               <input
                 type="text"
                 value={newMessage}
@@ -147,11 +289,12 @@ export default function Messages() {
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-DEFAULT focus:border-transparent outline-none"
                 disabled={sending}
               />
+              
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 type="submit"
-                disabled={!newMessage.trim() || sending}
+                disabled={(!newMessage.trim() && !selectedImage) || sending}
                 className="bg-primary-DEFAULT text-primary-dark px-6 py-3 rounded-lg font-semibold hover:bg-primary-DEFAULT/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {sending ? (
