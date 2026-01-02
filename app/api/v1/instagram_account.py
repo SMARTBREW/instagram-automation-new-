@@ -28,8 +28,8 @@ async def list_instagram_accounts(
     limit: int = Query(100, ge=1, le=100),
     current_user: User = Depends(require_permission("manage-instagram-accounts")),
 ):
-    """List user's Instagram accounts"""
-    return await instagram_service.get_user_instagram_accounts(current_user.id, skip, limit)
+    """List Instagram accounts. Admins see all accounts, users see only their own."""
+    return await instagram_service.get_user_instagram_accounts(current_user.id, skip, limit, current_user.role)
 
 
 @router.get("/{account_id}", response_model=InstagramAccountResponse)
@@ -37,9 +37,9 @@ async def get_instagram_account(
     account_id: str,
     current_user: User = Depends(require_permission("manage-instagram-accounts")),
 ):
-    """Get Instagram account details"""
-    account = await instagram_service.get_instagram_account(ObjectId(account_id), current_user.id)
-    return account.transform()
+    """Get Instagram account details. Admins can access any account."""
+    account = await instagram_service.get_instagram_account(ObjectId(account_id), current_user.id, current_user.role)
+    return await account.transform(include_user_info=(current_user.role == "admin"))
 
 
 @router.patch("/{account_id}", response_model=InstagramAccountResponse)
@@ -48,9 +48,9 @@ async def update_instagram_account(
     data: InstagramAccountUpdate,
     current_user: User = Depends(require_permission("manage-instagram-accounts")),
 ):
-    """Update Instagram account"""
+    """Update Instagram account. Admins can update any account."""
     return await instagram_service.update_instagram_account(
-        ObjectId(account_id), current_user.id, data
+        ObjectId(account_id), current_user.id, data, current_user.role
     )
 
 
@@ -59,8 +59,8 @@ async def delete_instagram_account(
     account_id: str,
     current_user: User = Depends(require_permission("manage-instagram-accounts")),
 ):
-    """Delete Instagram account (soft delete)"""
-    await instagram_service.delete_instagram_account(ObjectId(account_id), current_user.id)
+    """Delete Instagram account (soft delete). Admins can delete any account."""
+    await instagram_service.delete_instagram_account(ObjectId(account_id), current_user.id, current_user.role)
     return None
 
 
@@ -69,6 +69,6 @@ async def get_instagram_profile(
     account_id: str,
     current_user: User = Depends(require_permission("manage-instagram-accounts")),
 ):
-    """Get Instagram profile details"""
-    return await instagram_service.get_instagram_profile(ObjectId(account_id), current_user.id)
+    """Get Instagram profile details. Admins can access any account."""
+    return await instagram_service.get_instagram_profile(ObjectId(account_id), current_user.id, current_user.role)
 

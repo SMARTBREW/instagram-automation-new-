@@ -29,31 +29,45 @@ async def create_instagram_account(user_id: ObjectId, data: InstagramAccountCrea
     
     logger.info(f"Instagram account created: {account.instagramBusinessId} for user {user_id}")
     
-    return account.transform()
+    return await account.transform()
 
 
-async def get_user_instagram_accounts(user_id: ObjectId, skip: int = 0, limit: int = 100) -> List[dict]:
-    """Get all Instagram accounts for a user"""
-    accounts = await InstagramAccount.find(
-        {"user": user_id, "isActive": True}
-    ).skip(skip).limit(limit).to_list()
+async def get_user_instagram_accounts(user_id: ObjectId, skip: int = 0, limit: int = 100, user_role: str = "user") -> List[dict]:
+    """Get all Instagram accounts for a user (or all accounts if admin)"""
+    if user_role == "admin":
+        # Admin can see all accounts from all users
+        accounts = await InstagramAccount.find(
+            {"isActive": True}
+        ).skip(skip).limit(limit).to_list()
+        # Include user info for admin
+        return [await account.transform(include_user_info=True) for account in accounts]
+    else:
+        # Regular user sees only their accounts
+        accounts = await InstagramAccount.find(
+            {"user": user_id, "isActive": True}
+        ).skip(skip).limit(limit).to_list()
+        return [await account.transform() for account in accounts]
+
+
+async def get_instagram_account(account_id: ObjectId, user_id: ObjectId, user_role: str = "user") -> InstagramAccount:
+    """Get Instagram account by ID (must belong to user, unless admin)"""
+    if user_role == "admin":
+        # Admin can access any account
+        account = await InstagramAccount.find_one({"_id": account_id, "isActive": True})
+    else:
+        # Regular user must own the account
+        account = await InstagramAccount.find_one({"_id": account_id, "user": user_id, "isActive": True})
     
-    return [account.transform() for account in accounts]
-
-
-async def get_instagram_account(account_id: ObjectId, user_id: ObjectId) -> InstagramAccount:
-    """Get Instagram account by ID (must belong to user)"""
-    account = await InstagramAccount.find_one({"_id": account_id, "user": user_id, "isActive": True})
     if not account:
         raise NotFoundError("Instagram account not found")
     return account
 
 
 async def update_instagram_account(
-    account_id: ObjectId, user_id: ObjectId, data: InstagramAccountUpdate
+    account_id: ObjectId, user_id: ObjectId, data: InstagramAccountUpdate, user_role: str = "user"
 ) -> dict:
     """Update Instagram account"""
-    account = await get_instagram_account(account_id, user_id)
+    account = await get_instagram_account(account_id, user_id, user_role)
     
     update_data = data.model_dump(exclude_unset=True)
     if "username" in update_data and update_data["username"]:
@@ -67,12 +81,12 @@ async def update_instagram_account(
     
     logger.info(f"Instagram account updated: {account_id}")
     
-    return account.transform()
+    return await account.transform()
 
 
-async def delete_instagram_account(account_id: ObjectId, user_id: ObjectId) -> None:
+async def delete_instagram_account(account_id: ObjectId, user_id: ObjectId, user_role: str = "user") -> None:
     """Soft delete Instagram account"""
-    account = await get_instagram_account(account_id, user_id)
+    account = await get_instagram_account(account_id, user_id, user_role)
     account.isActive = False
     account.updatedAt = datetime.utcnow()
     await account.save()
@@ -80,9 +94,9 @@ async def delete_instagram_account(account_id: ObjectId, user_id: ObjectId) -> N
     logger.info(f"Instagram account deleted: {account_id}")
 
 
-async def get_instagram_profile(account_id: ObjectId, user_id: ObjectId) -> dict:
+async def get_instagram_profile(account_id: ObjectId, user_id: ObjectId, user_role: str = "user") -> dict:
     """Get Instagram profile details using Meta API"""
-    account = await get_instagram_account(account_id, user_id)
+    account = await get_instagram_account(account_id, user_id, user_role)
     
     if not account.username:
         raise BadRequestError("Username not set for this account")

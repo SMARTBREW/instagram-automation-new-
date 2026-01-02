@@ -19,9 +19,9 @@ class InstagramAccount(Document):
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     updatedAt: datetime = Field(default_factory=datetime.utcnow)
 
-    def transform(self) -> dict:
+    async def transform(self, include_user_info: bool = False) -> dict:
         """Return account data without sensitive fields"""
-        return {
+        result = {
             "id": str(self.id),
             "user": str(self.user),
             "pageId": self.pageId,
@@ -33,6 +33,19 @@ class InstagramAccount(Document):
             "createdAt": self.createdAt.isoformat(),
             "updatedAt": self.updatedAt.isoformat(),
         }
+        
+        # Include user info if requested (for admin view)
+        if include_user_info:
+            from app.models.user import User
+            user = await User.get(self.user)
+            if user:
+                result["userInfo"] = {
+                    "id": str(user.id),
+                    "name": user.name,
+                    "email": user.email,
+                }
+        
+        return result
 
     @classmethod
     async def is_instagram_business_id_taken(

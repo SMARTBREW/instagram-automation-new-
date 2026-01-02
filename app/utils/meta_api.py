@@ -62,8 +62,20 @@ async def send_instagram_message(
     page_access_token: str,
     instagram_business_id: str,
     page_id: Optional[str] = None,
+    messaging_tag: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Send a text message via Instagram Messaging API"""
+    """Send a text message via Instagram Messaging API
+    
+    Args:
+        recipient_id: Instagram user ID to send message to
+        message: Message text content
+        page_access_token: Page access token
+        instagram_business_id: Instagram Business Account ID
+        page_id: Facebook Page ID (preferred for messaging)
+        messaging_tag: Optional messaging tag (e.g., 'CONFIRMED_EVENT_UPDATE', 'POST_PURCHASE_UPDATE')
+                      Required for messages outside 24-hour window. Tags must be approved by Meta.
+    """
+    # Use Page ID if available, otherwise fall back to Instagram Business ID
     target_id = page_id or instagram_business_id
     url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{target_id}/messages"
     
@@ -74,12 +86,49 @@ async def send_instagram_message(
         "message": {"text": message},
     }
     
+    # Add messaging tag if provided (for messages outside 24-hour window)
+    if messaging_tag:
+        data["messaging_type"] = "MESSAGE_TAG"
+        data["tag"] = messaging_tag
+    
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, json=data, headers=headers, params=params)
             response.raise_for_status()
             result = response.json()
             return {"message_id": result.get("message_id")}
+        except httpx.HTTPStatusError as e:
+            error_detail = "Unknown error"
+            user_friendly_message = None
+            if e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_detail = error_data.get("error", {}).get("message", str(e.response.text))
+                    error_code = error_data.get("error", {}).get("code", "")
+                    error_type = error_data.get("error", {}).get("type", "")
+                    logger.error(f"Meta API Error - Type: {error_type}, Code: {error_code}, Message: {error_detail}")
+                    
+                    # Provide user-friendly error messages
+                    if error_code == 10 or "(#10)" in error_detail:
+                        user_friendly_message = (
+                            "Cannot send message: The 24-hour messaging window has expired. "
+                            "The user must message you again to open a new window, or you need to use "
+                            "an approved messaging tag (requires Meta App Review approval)."
+                        )
+                    elif error_code == 3 or "(#3)" in error_detail:
+                        user_friendly_message = (
+                            "Cannot send message: Application does not have permission. "
+                            "Please check your Meta App permissions and access token."
+                        )
+                except:
+                    error_detail = e.response.text
+            
+            if user_friendly_message:
+                logger.error(f"Error sending Instagram message: {user_friendly_message}")
+                raise Exception(f"Failed to send message: {user_friendly_message}")
+            else:
+                logger.error(f"Error sending Instagram message: {error_detail}")
+                raise Exception(f"Failed to send message: {error_detail}")
         except httpx.HTTPError as e:
             logger.error(f"Error sending Instagram message: {e}")
             if hasattr(e, "response") and e.response is not None:
@@ -95,6 +144,7 @@ async def send_instagram_attachment(
     page_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Send an attachment via Instagram Messaging API"""
+    # Use Page ID if available, otherwise fall back to Instagram Business ID
     target_id = page_id or instagram_business_id
     url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{target_id}/messages"
     
@@ -116,6 +166,19 @@ async def send_instagram_attachment(
             response.raise_for_status()
             result = response.json()
             return {"message_id": result.get("message_id")}
+        except httpx.HTTPStatusError as e:
+            error_detail = "Unknown error"
+            if e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_detail = error_data.get("error", {}).get("message", str(e.response.text))
+                    error_code = error_data.get("error", {}).get("code", "")
+                    error_type = error_data.get("error", {}).get("type", "")
+                    logger.error(f"Meta API Error - Type: {error_type}, Code: {error_code}, Message: {error_detail}")
+                except:
+                    error_detail = e.response.text
+            logger.error(f"Error sending Instagram attachment: {error_detail}")
+            raise Exception(f"Failed to send attachment: {error_detail}")
         except httpx.HTTPError as e:
             logger.error(f"Error sending Instagram attachment: {e}")
             if hasattr(e, "response") and e.response is not None:

@@ -23,6 +23,7 @@ async def verify_webhook(mode: str, verify_token: str, challenge: str) -> Option
 async def process_webhook_event(event_data: Dict[str, Any]) -> str:
     """Process incoming webhook event from Meta"""
     try:
+        logger.info(f"Received webhook event: {event_data}")
         entry = event_data.get("entry", [])
         if not entry:
             logger.warning("Empty webhook entry")
@@ -30,7 +31,11 @@ async def process_webhook_event(event_data: Dict[str, Any]) -> str:
         
         for entry_item in entry:
             messaging = entry_item.get("messaging", [])
+            if not messaging:
+                logger.warning(f"No messaging events in entry: {entry_item}")
+                continue
             for message_event in messaging:
+                logger.info(f"Processing messaging event: {message_event}")
                 await process_messaging_event(message_event)
         
         return "EVENT_RECEIVED"
@@ -51,13 +56,51 @@ async def process_messaging_event(event: Dict[str, Any]) -> None:
         logger.warning("Missing sender or recipient ID in webhook event")
         return
     
-    # Find Instagram account by recipient ID (instagramBusinessId)
+    logger.info(f"Processing webhook event - Sender: {sender_id}, Recipient: {recipient_id}")
+    
+    # Find Instagram account by recipient ID
+    # Meta may send either Page ID or Instagram Business ID as recipient
+    # Try exact string match first (most common case)
+    account = None
+    
+    # First, try to match by Instagram Business ID (more specific)
     account = await InstagramAccount.find_one(
         {"instagramBusinessId": recipient_id, "isActive": True}
     )
+    
+    # If not found, try Page ID
     if not account:
-        logger.warning(f"Instagram account not found for recipient: {recipient_id}")
+        account = await InstagramAccount.find_one(
+            {"pageId": recipient_id, "isActive": True}
+        )
+    
+    # If still not found, try matching as integers (Meta sometimes sends numeric IDs)
+    if not account:
+        try:
+            recipient_id_int = int(recipient_id)
+            # Try IG Business ID as int
+            account = await InstagramAccount.find_one(
+                {"instagramBusinessId": str(recipient_id_int), "isActive": True}
+            )
+            # Try Page ID as int
+            if not account:
+                account = await InstagramAccount.find_one(
+                    {"pageId": str(recipient_id_int), "isActive": True}
+                )
+        except (ValueError, TypeError):
+            pass
+    
+    if not account:
+        logger.error(f"❌ Instagram account not found for recipient: {recipient_id}")
+        logger.error(f"   Tried matching against instagramBusinessId and pageId (as string and int)")
+        # Log all active accounts for debugging
+        all_accounts = await InstagramAccount.find({"isActive": True}).to_list()
+        logger.error(f"   Active accounts in database:")
+        for acc in all_accounts:
+            logger.error(f"     - Username: {acc.username}, Page ID: {acc.pageId}, IG Business ID: {acc.instagramBusinessId}")
         return
+    
+    logger.info(f"✅ Matched account: {account.username} (Page ID: {account.pageId}, IG Business ID: {account.instagramBusinessId})")
     
     # Handle different event types
     if "message" in event:

@@ -15,9 +15,16 @@ class InstagramAccountCreate(InstagramAccountBase):
     pageAccessToken: str = Field(..., min_length=1)
 
 
+class UserInfo(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
 class InstagramAccountResponse(InstagramAccountBase):
     id: str
     user: str
+    userInfo: Optional[UserInfo] = None  # Only included for admin view
     isActive: bool
     createdAt: datetime
     updatedAt: datetime
