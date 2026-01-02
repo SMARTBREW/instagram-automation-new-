@@ -26,17 +26,33 @@ class Conversation(Document):
 
     def transform(self) -> dict:
         """Return conversation data"""
+        # Ensure timestamps are sent as UTC with 'Z' suffix for proper frontend parsing
+        last_message_timestamp = None
+        if self.lastMessageTimestamp:
+            last_msg_str = self.lastMessageTimestamp.isoformat()
+            if not last_msg_str.endswith('Z') and '+' not in last_msg_str:
+                last_msg_str = last_msg_str + 'Z'
+            last_message_timestamp = last_msg_str
+        
+        created_at_str = self.createdAt.isoformat()
+        if not created_at_str.endswith('Z') and '+' not in created_at_str:
+            created_at_str = created_at_str + 'Z'
+        
+        updated_at_str = self.updatedAt.isoformat()
+        if not updated_at_str.endswith('Z') and '+' not in updated_at_str:
+            updated_at_str = updated_at_str + 'Z'
+        
         return {
             "id": str(self.id),
             "instagramAccount": str(self.instagramAccount),
             "igUserId": self.igUserId,
             "igUsername": self.igUsername,
             "lastMessage": self.lastMessage,
-            "lastMessageTimestamp": self.lastMessageTimestamp.isoformat() if self.lastMessageTimestamp else None,
+            "lastMessageTimestamp": last_message_timestamp,
             "unreadCount": self.unreadCount,
             "isActive": self.isActive,
-            "createdAt": self.createdAt.isoformat(),
-            "updatedAt": self.updatedAt.isoformat(),
+            "createdAt": created_at_str,
+            "updatedAt": updated_at_str,
         }
 
     @classmethod

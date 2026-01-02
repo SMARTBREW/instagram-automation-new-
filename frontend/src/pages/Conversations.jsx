@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, MessageSquare, Clock, User, Search } from 'lucide-react'
 import { messageService } from '../services/messageService'
+import { formatRelativeTime } from '../utils/timeUtils'
 import toast from 'react-hot-toast'
 
 export default function Conversations() {
@@ -32,21 +33,6 @@ export default function Conversations() {
     conv.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return ''
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diff = now - date
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
-
-    if (minutes < 1) return 'Just now'
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    if (days < 7) return `${days}d ago`
-    return date.toLocaleDateString()
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-light via-primary-DEFAULT to-primary-light">
@@ -131,7 +117,7 @@ export default function Conversations() {
                         </p>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <Clock className="w-4 h-4" />
-                          <span>{formatTime(conv.lastMessageTimestamp)}</span>
+                          <span>{formatRelativeTime(conv.lastMessageTimestamp)}</span>
                         </div>
                       </div>
                     </div>

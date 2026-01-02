@@ -28,6 +28,20 @@ class Message(Document):
 
     def transform(self) -> dict:
         """Return message data"""
+        # Ensure timestamps are sent as UTC with 'Z' suffix for proper frontend parsing
+        # Python's isoformat() doesn't add 'Z' for naive datetimes, so we add it manually
+        timestamp_str = self.timestamp.isoformat()
+        if not timestamp_str.endswith('Z') and '+' not in timestamp_str:
+            timestamp_str = timestamp_str + 'Z'
+        
+        created_at_str = self.createdAt.isoformat()
+        if not created_at_str.endswith('Z') and '+' not in created_at_str:
+            created_at_str = created_at_str + 'Z'
+        
+        updated_at_str = self.updatedAt.isoformat()
+        if not updated_at_str.endswith('Z') and '+' not in updated_at_str:
+            updated_at_str = updated_at_str + 'Z'
+        
         return {
             "id": str(self.id),
             "conversation": str(self.conversation),
@@ -37,11 +51,11 @@ class Message(Document):
             "senderId": self.senderId,
             "text": self.text,
             "attachments": [{"type": a.type, "url": str(a.url)} for a in self.attachments],
-            "timestamp": self.timestamp.isoformat(),
+            "timestamp": timestamp_str,
             "isRead": self.isRead,
             "metadata": self.metadata,
-            "createdAt": self.createdAt.isoformat(),
-            "updatedAt": self.updatedAt.isoformat(),
+            "createdAt": created_at_str,
+            "updatedAt": updated_at_str,
         }
 
     class Settings:

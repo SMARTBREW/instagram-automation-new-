@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Send, User, Bot, MessageSquare } from 'lucide-react'
 import { messageService } from '../services/messageService'
+import { formatTime, formatRelativeTime } from '../utils/timeUtils'
 import toast from 'react-hot-toast'
 
 export default function Messages() {
@@ -56,11 +57,6 @@ export default function Messages() {
     }
   }
 
-  const formatTime = (timestamp) => {
-    if (!timestamp) return ''
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-light via-primary-DEFAULT to-primary-light flex flex-col">
@@ -125,7 +121,7 @@ export default function Messages() {
                                   : 'text-gray-500'
                               }`}
                             >
-                              {formatTime(message.timestamp)}
+                              {formatRelativeTime(message.timestamp || message.createdAt)}
                             </p>
                           </div>
                         </div>
