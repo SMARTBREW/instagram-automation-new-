@@ -1,11 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const INACTIVITY_TIMEOUT = 12 * 60 * 60 * 1000 // 12 hours in milliseconds
-const LAST_ACTIVITY_KEY = 'lastActivityTime'
-
-import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { authService } from '../services/authService'
 
 const INACTIVITY_TIMEOUT = 12 * 60 * 60 * 1000 // 12 hours in milliseconds

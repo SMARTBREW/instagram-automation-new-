@@ -22,7 +22,13 @@ export default function Conversations() {
       const data = await messageService.getConversations(accountId)
       setConversations(data.conversations || [])
     } catch (error) {
-      toast.error('Failed to load conversations')
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        toast.error('Request timed out. Please try again.')
+      } else if (error.response?.status === 401) {
+        toast.error('Session expired. Please login again.')
+      } else {
+        toast.error('Failed to load conversations')
+      }
     } finally {
       setLoading(false)
     }

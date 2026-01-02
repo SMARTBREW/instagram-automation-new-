@@ -7,6 +7,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 second timeout to prevent hanging requests
 })
 
 // Add token to requests
@@ -27,27 +28,58 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config
+    
+    // Prevent infinite retry loops
+    if (originalRequest._retry) {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
+
+    if (error.response?.status === 401 || error.code === 'ECONNABORTED') {
       const refreshToken = localStorage.getItem('refreshToken')
       if (refreshToken) {
+        originalRequest._retry = true
         try {
-          const response = await axios.post(`${API_BASE_URL}/v1/auth/refresh-tokens`, {
-            refreshToken,
-          })
+          const response = await axios.post(
+            `${API_BASE_URL}/v1/auth/refresh-tokens`,
+            { refreshToken },
+            { timeout: 10000 } // 10 second timeout for refresh
+          )
           const { access, refresh } = response.data.tokens
           localStorage.setItem('accessToken', access.token)
           localStorage.setItem('refreshToken', refresh.token)
-          error.config.headers.Authorization = `Bearer ${access.token}`
-          return api.request(error.config)
+          originalRequest.headers.Authorization = `Bearer ${access.token}`
+          return api.request(originalRequest)
         } catch (refreshError) {
+          // Token refresh failed - clear everything and redirect
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
+          localStorage.removeItem('user')
+          localStorage.removeItem('lastActivityTime')
           window.location.href = '/login'
+          return Promise.reject(refreshError)
         }
       } else {
+        // No refresh token - redirect to login
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
+        localStorage.removeItem('lastActivityTime')
         window.location.href = '/login'
       }
     }
+    
+    // Handle network errors and timeouts
+    if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+      // Don't redirect on timeout, just reject the promise
+      // The component should handle the error
+      return Promise.reject(error)
+    }
+    
     return Promise.reject(error)
   }
 )

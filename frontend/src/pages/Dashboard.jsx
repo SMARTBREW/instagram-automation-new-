@@ -23,7 +23,15 @@ export default function Dashboard() {
       const data = await instagramService.getAccounts()
       setAccounts(data)
     } catch (error) {
-      toast.error('Failed to load accounts')
+      // Handle timeout and network errors
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        toast.error('Request timed out. Please check your connection and try again.')
+      } else if (error.response?.status === 401) {
+        // Token expired - will be handled by interceptor, but show message
+        toast.error('Session expired. Please login again.')
+      } else {
+        toast.error('Failed to load accounts')
+      }
     } finally {
       setLoading(false)
     }

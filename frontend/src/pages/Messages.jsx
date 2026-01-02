@@ -38,7 +38,15 @@ export default function Messages() {
       const data = await messageService.getMessages(conversationId)
       setMessages(data.messages || [])
     } catch (error) {
-      console.error('Failed to load messages:', error)
+      // Don't show toast for timeout errors during polling to avoid spam
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        console.warn('Request timed out during polling')
+      } else if (error.response?.status === 401) {
+        // Token expired - will be handled by interceptor
+        console.warn('Session expired')
+      } else {
+        console.error('Failed to load messages:', error)
+      }
     } finally {
       setLoading(false)
     }
