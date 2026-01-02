@@ -29,21 +29,23 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token"""
+    """Create a JWT access token - set to never expire (365 days)"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_EXPIRATION_MINUTES)
+        # Set to 365 days (effectively never expires unless logout)
+        expire = datetime.utcnow() + timedelta(days=365)
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm="HS256")
     return encoded_jwt
 
 
 def create_refresh_token(data: dict) -> str:
-    """Create a JWT refresh token"""
+    """Create a JWT refresh token - set to never expire (365 days)"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS)
+    # Set to 365 days (effectively never expires unless logout)
+    expire = datetime.utcnow() + timedelta(days=365)
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm="HS256")
     return encoded_jwt

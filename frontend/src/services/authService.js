@@ -11,6 +11,8 @@ export const authService = {
       localStorage.setItem('accessToken', response.data.tokens.access.token)
       localStorage.setItem('refreshToken', response.data.tokens.refresh.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
+      // Set initial activity time on register
+      localStorage.setItem('lastActivityTime', Date.now().toString())
     }
     return response.data
   },
@@ -24,6 +26,8 @@ export const authService = {
       localStorage.setItem('accessToken', response.data.tokens.access.token)
       localStorage.setItem('refreshToken', response.data.tokens.refresh.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
+      // Set initial activity time on login
+      localStorage.setItem('lastActivityTime', Date.now().toString())
     }
     return response.data
   },
@@ -40,6 +44,7 @@ export const authService = {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
+    localStorage.removeItem('lastActivityTime') // Clear activity tracking
   },
 
   getCurrentUser() {

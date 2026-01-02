@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { authService } from './services/authService'
+import { useInactivity } from './hooks/useInactivity'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -12,38 +13,47 @@ function PrivateRoute({ children }) {
   return authService.isAuthenticated() ? children : <Navigate to="/login" />
 }
 
+function AppContent() {
+  // Track inactivity (hook always called, but only tracks if authenticated)
+  useInactivity()
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route
+        path="/"
+        element={
+          <PrivateRoute>
+            <Dashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/conversations/:accountId"
+        element={
+          <PrivateRoute>
+            <Conversations />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/messages/:conversationId"
+        element={
+          <PrivateRoute>
+            <Messages />
+          </PrivateRoute>
+        }
+      />
+    </Routes>
+  )
+}
+
 function App() {
   return (
     <Router>
       <Toaster position="top-right" />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/conversations/:accountId"
-          element={
-            <PrivateRoute>
-              <Conversations />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/messages/:conversationId"
-          element={
-            <PrivateRoute>
-              <Messages />
-            </PrivateRoute>
-          }
-        />
-      </Routes>
+      <AppContent />
     </Router>
   )
 }
