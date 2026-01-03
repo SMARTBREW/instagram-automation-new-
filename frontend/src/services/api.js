@@ -39,7 +39,8 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    if (error.response?.status === 401 || error.code === 'ECONNABORTED') {
+    // Only handle 401 for token refresh, not timeouts
+    if (error.response?.status === 401) {
       const refreshToken = localStorage.getItem('refreshToken')
       if (refreshToken) {
         originalRequest._retry = true

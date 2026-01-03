@@ -20,7 +20,25 @@ export default function Login() {
       toast.success('Login successful!')
       navigate('/')
     } catch (error) {
-      toast.error(error.response?.data?.error?.message || 'Login failed')
+      // Better error handling for different error types
+      let errorMessage = 'Login failed'
+      
+      if (error.response) {
+        // Server responded with error
+        errorMessage = error.response?.data?.error?.message || 
+                      error.response?.data?.message || 
+                      `Server error: ${error.response.status}`
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = 'Network error. Please check your connection and try again.'
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.'
+      } else {
+        errorMessage = error.message || 'Login failed'
+      }
+      
+      console.error('Login error:', error)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }

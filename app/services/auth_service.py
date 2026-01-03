@@ -58,38 +58,50 @@ async def register_user(data: RegisterRequest) -> dict:
 
 async def login_user(data: LoginRequest) -> dict:
     """Login user"""
-    user = await User.find_one({"email": data.email.lower()})
-    if not user or not user.is_password_match(data.password):
-        raise UnauthorizedError("Invalid email or password")
-    
-    # Generate tokens
-    access_token = create_access_token({"sub": str(user.id), "role": user.role})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
-    
-    # Store refresh token
-    refresh_token_doc = Token(
-        token=refresh_token,
-        user=user.id,
-        type="refresh",
-        expires=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS),
-    )
-    await refresh_token_doc.insert()
-    
-    logger.info(f"User logged in: {user.email}")
-    
-    return {
-        "user": user.transform(),
-        "tokens": {
-            "access": {
-                "token": access_token,
-                "expires": datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_EXPIRATION_MINUTES),
+    try:
+        user = await User.find_one({"email": data.email.lower()})
+        if not user:
+            logger.warning(f"Login attempt with non-existent email: {data.email.lower()}")
+            raise UnauthorizedError("Invalid email or password")
+        
+        if not user.is_password_match(data.password):
+            logger.warning(f"Login attempt with wrong password for: {data.email.lower()}")
+            raise UnauthorizedError("Invalid email or password")
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": str(user.id), "role": user.role})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
+        
+        # Store refresh token
+        refresh_token_doc = Token(
+            token=refresh_token,
+            user=user.id,
+            type="refresh",
+            expires=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS),
+        )
+        await refresh_token_doc.insert()
+        
+        logger.info(f"User logged in: {user.email}")
+        
+        return {
+            "user": user.transform(),
+            "tokens": {
+                "access": {
+                    "token": access_token,
+                    "expires": datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_EXPIRATION_MINUTES),
+                },
+                "refresh": {
+                    "token": refresh_token,
+                    "expires": datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS),
+                },
             },
-            "refresh": {
-                "token": refresh_token,
-                "expires": datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS),
-            },
-        },
-    }
+        }
+    except UnauthorizedError:
+        # Re-raise authentication errors
+        raise
+    except Exception as e:
+        logger.error(f"Login error for {data.email.lower()}: {str(e)}", exc_info=True)
+        raise UnauthorizedError("Login failed. Please try again.")
 
 
 async def logout_user(refresh_token: str) -> None:
