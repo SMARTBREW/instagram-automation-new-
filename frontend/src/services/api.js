@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { shouldRedirectToLogin, clearFailureCounter } from '../utils/errorHandler'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://instagram-automation-new.onrender.com'
 
@@ -8,12 +7,30 @@ const isAuthenticated = () => {
   return !!localStorage.getItem('accessToken')
 }
 
+// Helper to clear auth and redirect to login
+const redirectToLogin = (saveRoute = true) => {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+  localStorage.removeItem('lastActivityTime')
+  
+  // Save current route to redirect back after login
+  if (saveRoute) {
+    const currentPath = window.location.pathname
+    if (currentPath !== '/login' && currentPath !== '/register') {
+      sessionStorage.setItem('redirectAfterLogin', currentPath)
+    }
+  }
+  
+  window.location.href = '/login'
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30 second timeout to prevent hanging requests
+  timeout: 60000, // 60 second timeout to allow for Render cold start (30s) + request processing
 })
 
 // Add token to requests
@@ -30,38 +47,24 @@ api.interceptors.request.use(
   }
 )
 
-// Handle token refresh on 401 and redirect on critical errors
+// Handle token refresh on 401 and redirect on timeouts/network errors
 api.interceptors.response.use(
-  (response) => {
-    // Reset failure counter on successful response
-    clearFailureCounter()
-    return response
-  },
+  (response) => response,
   async (error) => {
     const originalRequest = error.config
     
     // Prevent infinite retry loops
     if (originalRequest._retry) {
-      // Clear auth data and redirect to login
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('user')
-      localStorage.removeItem('lastActivityTime')
-      // Store current route to redirect back after login
-      const currentPath = window.location.pathname
-      if (currentPath !== '/login' && currentPath !== '/register') {
-        sessionStorage.setItem('redirectAfterLogin', currentPath)
-      }
-      window.location.href = '/login'
+      redirectToLogin()
       return Promise.reject(error)
     }
 
+    // Don't redirect on login/register endpoints
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/login') || 
+                           originalRequest.url?.includes('/auth/register')
+    
     // Handle 401 - try to refresh token
     if (error.response?.status === 401) {
-      // Don't try to refresh on login/register endpoints
-      const isAuthEndpoint = originalRequest.url?.includes('/auth/login') || 
-                             originalRequest.url?.includes('/auth/register')
-      
       if (isAuthEndpoint) {
         // For login/register, just reject (let component handle it)
         return Promise.reject(error)
@@ -80,48 +83,35 @@ api.interceptors.response.use(
           localStorage.setItem('accessToken', access.token)
           localStorage.setItem('refreshToken', refresh.token)
           originalRequest.headers.Authorization = `Bearer ${access.token}`
-          clearFailureCounter() // Reset on successful refresh
           return api.request(originalRequest)
         } catch (refreshError) {
-          // Token refresh failed - clear everything and redirect
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          localStorage.removeItem('user')
-          localStorage.removeItem('lastActivityTime')
-          const currentPath = window.location.pathname
-          if (currentPath !== '/login' && currentPath !== '/register') {
-            sessionStorage.setItem('redirectAfterLogin', currentPath)
-          }
-          window.location.href = '/login'
+          // Token refresh failed - redirect to login
+          redirectToLogin()
           return Promise.reject(refreshError)
         }
       } else {
         // No refresh token - redirect to login
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
-        localStorage.removeItem('user')
-        localStorage.removeItem('lastActivityTime')
-        const currentPath = window.location.pathname
-        if (currentPath !== '/login' && currentPath !== '/register') {
-          sessionStorage.setItem('redirectAfterLogin', currentPath)
-        }
-        window.location.href = '/login'
+        redirectToLogin()
         return Promise.reject(error)
       }
     }
     
-    // Use smart error handler to decide if we should redirect
-    if (shouldRedirectToLogin(error, originalRequest.url)) {
-      // Multiple consecutive failures - backend is likely down
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('user')
-      localStorage.removeItem('lastActivityTime')
-      const currentPath = window.location.pathname
-      if (currentPath !== '/login' && currentPath !== '/register') {
-        sessionStorage.setItem('redirectAfterLogin', currentPath)
+    // Handle timeouts and network errors - redirect immediately on first timeout
+    if (
+      error.code === 'ECONNABORTED' || 
+      error.message === 'Network Error' ||
+      error.code === 'ERR_NETWORK' ||
+      (error.response?.status >= 500 && error.response?.status < 600)
+    ) {
+      // Only redirect if user is authenticated and not on auth pages
+      if (!isAuthEndpoint && isAuthenticated()) {
+        // Show helpful message about Render cold start
+        if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+          console.warn('Request timed out - Render service may be waking up from sleep. This is normal on free tier.')
+        }
+        redirectToLogin()
       }
-      window.location.href = '/login'
+      return Promise.reject(error)
     }
     
     return Promise.reject(error)

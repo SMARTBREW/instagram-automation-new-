@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { useEffect } from 'react'
 import { authService } from './services/authService'
 import { useInactivity } from './hooks/useInactivity'
+import { startHealthCheck, stopHealthCheck } from './utils/healthCheck'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -16,6 +18,14 @@ function PrivateRoute({ children }) {
 function AppContent() {
   // Track inactivity (hook always called, but only tracks if authenticated)
   useInactivity()
+
+  // Start health check pings to keep Render service awake
+  useEffect(() => {
+    startHealthCheck()
+    return () => {
+      stopHealthCheck()
+    }
+  }, [])
 
   return (
     <Routes>

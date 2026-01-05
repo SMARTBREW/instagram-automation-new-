@@ -38,9 +38,9 @@ export default function Login() {
                       `Server error: ${error.response.status}`
       } else if (error.request) {
         // Request was made but no response received
-        errorMessage = 'Network error. Please check your connection and try again.'
+        errorMessage = 'Network error. The server may be waking up (Render free tier). Please try again in a moment.'
       } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Request timed out. Please try again.'
+        errorMessage = 'Request timed out. The server may be waking up from sleep (Render free tier). Please try again.'
       } else {
         errorMessage = error.message || 'Login failed'
       }
