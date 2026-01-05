@@ -18,7 +18,15 @@ export default function Login() {
     try {
       await authService.login(email, password)
       toast.success('Login successful!')
-      navigate('/')
+      
+      // Redirect to saved path or dashboard
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+      if (redirectPath) {
+        sessionStorage.removeItem('redirectAfterLogin')
+        navigate(redirectPath)
+      } else {
+        navigate('/')
+      }
     } catch (error) {
       // Better error handling for different error types
       let errorMessage = 'Login failed'

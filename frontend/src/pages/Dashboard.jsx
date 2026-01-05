@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, Plus, Instagram, Users, MessageSquare, Shield } from 'lucide-react'
+import { LogOut, Plus, Instagram, Users, MessageSquare, Shield, AlertCircle, RefreshCw } from 'lucide-react'
 import { authService } from '../services/authService'
 import { instagramService } from '../services/instagramService'
 import AddAccountModal from '../components/AddAccountModal'
+import { getErrorMessage, isRetryableError } from '../utils/errorHandler'
 import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [error, setError] = useState(null)
+  const [retrying, setRetrying] = useState(false)
   const navigate = useNavigate()
   const user = authService.getCurrentUser()
 
@@ -18,23 +21,33 @@ export default function Dashboard() {
     loadAccounts()
   }, [])
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (showRetry = false) => {
     try {
+      setError(null)
+      setRetrying(showRetry)
       const data = await instagramService.getAccounts()
       setAccounts(data)
+      setError(null) // Clear any previous errors
     } catch (error) {
-      // Handle timeout and network errors
-      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
-        toast.error('Request timed out. Please check your connection and try again.')
-      } else if (error.response?.status === 401) {
-        // Token expired - will be handled by interceptor, but show message
-        toast.error('Session expired. Please login again.')
-      } else {
-        toast.error('Failed to load accounts')
+      const errorMessage = getErrorMessage(error)
+      setError({
+        message: errorMessage,
+        retryable: isRetryableError(error),
+        originalError: error
+      })
+      
+      // Only show toast for non-retryable errors or if not showing retry option
+      if (!isRetryableError(error) || !showRetry) {
+        toast.error(errorMessage)
       }
     } finally {
       setLoading(false)
+      setRetrying(false)
     }
+  }
+
+  const handleRetry = () => {
+    loadAccounts(true)
   }
 
   const handleLogout = async () => {
@@ -110,10 +123,69 @@ export default function Dashboard() {
           </p>
         </motion.div>
 
+        {error && error.retryable && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-yellow-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Connection issue detected
+                  </p>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    {error.message}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="ml-4 flex items-center gap-2 px-4 py-2 bg-yellow-400 text-yellow-900 rounded-lg hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {retrying ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Retry
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <div className="w-12 h-12 border-4 border-primary-DEFAULT border-t-transparent rounded-full animate-spin" />
           </div>
+        ) : error && !error.retryable ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12 bg-white rounded-xl shadow-lg"
+          >
+            <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-primary-dark mb-2">
+              Failed to load accounts
+            </h3>
+            <p className="text-gray-600 mb-6">{error.message}</p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRetry}
+              className="bg-primary-DEFAULT text-primary-dark px-6 py-3 rounded-lg font-semibold hover:bg-primary-DEFAULT/90 transition"
+            >
+              Try Again
+            </motion.button>
+          </motion.div>
         ) : (
           <motion.div
             variants={containerVariants}
