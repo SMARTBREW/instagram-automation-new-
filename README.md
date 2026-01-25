@@ -1,7 +1,5 @@
 # Instagram DM Automation - FastAPI Backend
 
-A FastAPI backend application for Instagram DM automation that integrates with Meta's Instagram Messaging API.
-
 ## Features
 
 - **User Authentication**: JWT-based authentication with access and refresh tokens
